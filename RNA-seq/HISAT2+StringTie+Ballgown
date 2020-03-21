@@ -1,0 +1,45 @@
+#conda创建虚拟环境命名为rnaseq
+conda creat -n rnaseq python=2.7.15
+conda activate ranseq
+conda install hisat2-2.2.0
+conda install stringtie
+conda deactivate#退出虚拟环境
+#按照生信小Vir的教程进行服务器安装R
+安装完退出R(按q)
+#安装gffcompare,github上有教程git clone https://github.com/gpertea/gffcompare
+#安装ballgown，检索biocoductor,搜索ballgown的安装指南
+#进入R，加载中国镜像，安装ballgown
+#安装devtools
+install.packages(“devtools”)
+
+#下载测试数据 wget ftp://ftp.ccb.jhu.edu/pub/RNAseq_protocol/chrX_data.tar.gz
+#用hisat2-build建参考基因组索引(gtf文件可从官网下载到）
+先用脚本根据chrx.gtf文件提取内含子和外显子的位点，再构建index
+ extract_splice_sites.py chrX_data/genes/chrX.gtf > chrX.ss 
+ extract_exons.py chrX_data/genes/chrX.gtf > chrX.exon
+ hisat2-build --ss chrX.ss --exon chrX.exon Xgenome/chrX.fa chrX_data/genome/chrX.fachrX_tran
+ #用hista2将处理后的测序数据比对到参考基因组索引
+ cat ID.txt | while read -r line;
+ do hisat2 -p 8 --dta -x indexes_pathway/chrX_tran -1 samples_pathway/${line}_chrX_1.fastq.gz -2 samples_pathway/${line}_chrX_2.fastq.gz -S ${line}_chrX.sam; done
+ #把上一步的sam文件排序并转换为bam文件
+ cat ID.txt | while read -r line;
+ do samtools sort -@ 8 -o ${line}_chrX.bam ${line}_chrX.sam; done
+ #组装转录本Assmble
+ cat ID.txt | while read -r line;
+ do stringtie -p 8 -G pathway/chrX.gtf -o ${line}_chrX.gtf –l ${line} ${line}_chrX.bam; done
+ #制作mergelist用于合并转录本
+ ls pathway/*.gtf > mergelist.txt
+ #合并转录本
+  stringtie --merge -p 8 -G pathway/chrX.gtf -o stringtie_merged.gtf pathway/mergelist.txt
+ #检验合并后转录本比对到参考注释的情况（可做可不做）
+ gffcompare –r pathway/chrX.gtf –G –o merged stringtie_merged.gtf
+ #估算转录本丰度和为下游Ballgown创建计数表（table counts)
+ cat ID.txt | while read -r line;
+ do stringtie –e –B -p 8 -G stringtie_merged.gtf -o pathway/${line}_chrX.gtf ${line}_chrX.bam; done
+ (结果加在xx_chrX.gtf文件内）
+ 
+ 
+
+ 
+ 
+ 
